@@ -103,7 +103,7 @@ src/
 
 | Name | Role |
 |---|---|
-| **BreadTan** (breadtan@e.ntu.edu.sg) | Developer & designer |
+| **Bearbitrabbit** (Me) | Developer & designer |
 | **Claude** (Anthropic) | AI pair programmer — architecture, bug fixes, feature implementation |
 
 ---
