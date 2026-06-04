@@ -8,8 +8,9 @@ Mora strips away everything that doesn't help you show up and start. It gives yo
 
 ## What it does
 
-- **Focus sessions** — pick a task, set a timer (5–60 min), begin. Extend when you're in flow.
-- **Project whiteboard** — draw freehand, build a mind map, drop sticky notes, and track your work state. Opens fullscreen for a real workspace feel.
+- **Focus sessions** — pick a task, set a timer (5–60 min), begin. The timer runs in real time — opening the fullscreen whiteboard mid-session doesn't pause or reset it.
+- **Keep going** — extend your session when you're in flow. Each completed extension period earns bonus XP; committing to multiple extensions and bailing early only awards XP for the periods you actually finish.
+- **Project whiteboard** — draw freehand, build a mind map, drop sticky notes, and upload images. Opens fullscreen for a real workspace feel. All board content (nodes, stickies, images) persists across the embedded ↔ fullscreen transition.
 - **Focus status** — broadcast to yourself (and anyone watching): 🎯 Deep Focus, 💭 Thinking, 🚧 Blocked, ✍️ Taking Notes, ☕ Short Break.
 - **XP + wins** — every session earns XP and a win entry. Twenty sessions unlocks your Focus Profile.
 - **Idea garden** — capture loose thoughts between sessions and turn them into work when ready.
@@ -44,7 +45,8 @@ Mora strips away everything that doesn't help you show up and start. It gives yo
 - **Vite 6** — fast dev server and bundler
 - **Tabler Icons** — consistent icon set
 - **Stripe Payment Links** — subscription handling via `?stripe=success` redirect
-- **localStorage** — all state persists client-side, no backend required
+- **localStorage** — permanent state (sessions, XP, wins, whiteboard) persists client-side, no backend required
+- **sessionStorage** — active timer state; restored with a wall-clock correction so time spent in the fullscreen whiteboard counts against the running session
 
 ---
 
@@ -82,15 +84,17 @@ src/
     Feed.jsx              # Wins feed
     Profile.jsx           # Focus profile (unlocks at 20 sessions)
   components/
-    SessionWhiteboard.jsx # Whiteboard: draw, sticky notes, mind map, focus status
+    SessionWhiteboard.jsx # Whiteboard: draw, sticky notes, mind map, images, focus status
     FocusScreenTools.jsx  # In-session ambient tools
+    FocusProfile.jsx      # Generated focus profile card
     StripeModal.jsx       # Upgrade modal → Stripe redirect
     Nav.jsx               # Bottom nav (hidden on session + whiteboard routes)
     Page.jsx              # Animated page wrapper
+    TaskTile.jsx          # Task selector tile
     XPBar.jsx             # XP progress bar
     WinCard.jsx           # Win card component
   context/
-    MoraContext.jsx        # Global localStorage-backed state
+    MoraContext.jsx       # Global localStorage-backed state (sessions, XP, whiteboard nodes/stickies)
 ```
 
 ---

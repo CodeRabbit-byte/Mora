@@ -10,6 +10,17 @@ import { useMora } from '../context/MoraContext.jsx';
 
 const FREE_SESSION_MINUTES = 5;
 const SUBSCRIBED_PRESETS = [5, 10, 15, 25];
+const TIMER_KEY = 'mora_session_timer';
+
+function loadSavedTimer() {
+  try { return JSON.parse(sessionStorage.getItem(TIMER_KEY)) ?? {}; } catch { return {}; }
+}
+function saveTimerState(state) {
+  try { sessionStorage.setItem(TIMER_KEY, JSON.stringify(state)); } catch {}
+}
+function clearSavedTimer() {
+  try { sessionStorage.removeItem(TIMER_KEY); } catch {}
+}
 
 function formatTime(seconds) {
   const mins = Math.floor(seconds / 60);
@@ -36,11 +47,22 @@ export default function Session() {
   } = useMora();
   const activeMinutes = subscribed ? sessionMinutes : FREE_SESSION_MINUTES;
   const sessionSeconds = activeMinutes * 60;
-  const [mode, setMode] = useState('pre');
-  const [remaining, setRemaining] = useState(sessionSeconds);
-  const [elapsed, setElapsed] = useState(0);
-  const [extensions, setExtensions] = useState(0);
-  const [pendingExtensions, setPendingExtensions] = useState(0);
+  // Restore active timer across whiteboard navigation (session storage, not localStorage)
+  const [saved] = useState(() => {
+    const s = loadSavedTimer();
+    if (s?.mode !== 'active') return {};
+    // Subtract wall-clock time spent away (e.g. on the fullscreen whiteboard page).
+    // Cap at s.remaining so elapsed stays sensible if the tab was backgrounded for ages.
+    const wallClockElapsed = s.savedAt
+      ? Math.min(s.remaining, Math.floor((Date.now() - s.savedAt) / 1000))
+      : 0;
+    return { ...s, remaining: s.remaining - wallClockElapsed, elapsed: s.elapsed + wallClockElapsed };
+  });
+  const [mode, setMode] = useState(saved.mode ?? 'pre');
+  const [remaining, setRemaining] = useState(saved.remaining ?? sessionSeconds);
+  const [elapsed, setElapsed] = useState(saved.elapsed ?? 0);
+  const [extensions, setExtensions] = useState(saved.extensions ?? 0);
+  const [pendingExtensions, setPendingExtensions] = useState(saved.pendingExtensions ?? 0);
   const [earnedXP, setEarnedXP] = useState(10);
   const [displayXP, setDisplayXP] = useState(0);
   const [finalTotalXP, setFinalTotalXP] = useState(totalXP);
@@ -48,11 +70,11 @@ export default function Session() {
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [focusToolsOpen, setFocusToolsOpen] = useState(false);
   const completedRef = useRef(false);
-  const remainingRef = useRef(sessionSeconds);
-  const elapsedRef = useRef(0);
-  const extensionsRef = useRef(0);
-  const pendingExtensionsRef = useRef(0);
-  const extensionStartedAtRef = useRef(null);
+  const remainingRef = useRef(saved.remaining ?? sessionSeconds);
+  const elapsedRef = useRef(saved.elapsed ?? 0);
+  const extensionsRef = useRef(saved.extensions ?? 0);
+  const pendingExtensionsRef = useRef(saved.pendingExtensions ?? 0);
+  const extensionStartedAtRef = useRef(saved.extensionStartedAt ?? null);
   const totalXPRef = useRef(totalXP);
   const sessionsRef = useRef(sessions);
   const currentTaskRef = useRef(currentTask);
@@ -97,6 +119,7 @@ export default function Session() {
         setRemaining(0);
         elapsedRef.current += 1;
         setElapsed(elapsedRef.current);
+        clearSavedTimer();
         completeSession();
         return;
       }
@@ -105,6 +128,15 @@ export default function Session() {
       setRemaining(remainingRef.current);
       elapsedRef.current += 1;
       setElapsed(elapsedRef.current);
+      saveTimerState({
+        mode: 'active',
+        remaining: remainingRef.current,
+        elapsed: elapsedRef.current,
+        extensions: extensionsRef.current,
+        pendingExtensions: pendingExtensionsRef.current,
+        extensionStartedAt: extensionStartedAtRef.current,
+        savedAt: Date.now(),
+      });
     }, 1000);
 
     return () => window.clearInterval(timer);
@@ -129,12 +161,14 @@ export default function Session() {
   function completeSession() {
     if (completedRef.current) return;
     completedRef.current = true;
-    const completedPendingExtension =
-      pendingExtensionsRef.current > 0 &&
-      extensionStartedAtRef.current !== null &&
-      elapsedRef.current - extensionStartedAtRef.current >= sessionSeconds;
+    clearSavedTimer();
+    const totalExtensionTime =
+      pendingExtensionsRef.current > 0 && extensionStartedAtRef.current !== null
+        ? elapsedRef.current - extensionStartedAtRef.current
+        : 0;
     const completedExtensions =
-      extensionsRef.current + (completedPendingExtension ? pendingExtensionsRef.current : 0);
+      extensionsRef.current +
+      Math.min(pendingExtensionsRef.current, Math.floor(totalExtensionTime / sessionSeconds));
     const xp = 10 + completedExtensions * 5;
     const duration = Math.max(1, Math.round(elapsedRef.current / 60));
     const date = new Date().toISOString();
@@ -148,6 +182,7 @@ export default function Session() {
   }
 
   function resetSession() {
+    clearSavedTimer();
     completedRef.current = false;
     setMode('pre');
     remainingRef.current = sessionSeconds;
@@ -263,8 +298,13 @@ export default function Session() {
               <button
                 type="button"
                 onClick={() => {
+                  // Only stamp the start of the first extension; subsequent clicks
+                  // just increase the commitment count so completion is measured
+                  // against the original start time.
+                  if (pendingExtensionsRef.current === 0) {
+                    extensionStartedAtRef.current = elapsedRef.current;
+                  }
                   setPendingExtensions((n) => n + 1);
-                  extensionStartedAtRef.current = elapsedRef.current;
                   remainingRef.current = sessionSeconds;
                   setRemaining(sessionSeconds);
                 }}

@@ -18,6 +18,10 @@ import {
 } from '@tabler/icons-react';
 import { useMora } from '../context/MoraContext.jsx';
 
+// Module-level store so images survive navigation between embedded and fullscreen
+// whiteboard views without hitting localStorage (base64 data URLs can be large).
+const _imageStore = { images: [] };
+
 const FOCUS_STATUSES = [
   { id: 'deep',     emoji: '🎯', label: 'Deep Focus',    hint: 'In the zone — no interruptions' },
   { id: 'thinking', emoji: '💭', label: 'Thinking',      hint: 'Processing — give me a moment' },
@@ -65,7 +69,7 @@ export default function SessionWhiteboard({ taskName, subscribed, onUpgrade, isF
   const [selectedImageId, setSelectedImageId]   = useState(null);
   const [selectedStickyId, setSelectedStickyId] = useState(null);
   const [editingStickyId, setEditingStickyId]   = useState(null);
-  const [images, setImages]                     = useState([]);
+  const [images, setImages]                     = useState(() => _imageStore.images);
   const [focusStatus, setFocusStatus]           = useState(null);
   const [showStatusPicker, setShowStatusPicker] = useState(false);
   const [drawColor, setDrawColor]               = useState('#1a1a1a');
@@ -80,13 +84,19 @@ export default function SessionWhiteboard({ taskName, subscribed, onUpgrade, isF
     );
   }, [taskName]);
 
-  // Canvas resize handler — preserves drawn content across resizes
+  // Keep module-level image store in sync so images survive navigation to/from fullscreen
+  useEffect(() => { _imageStore.images = images; }, [images]);
+
+  // Canvas resize handler — preserves drawn content across resizes.
+  // ResizeObserver (not window.resize) so the buffer is set correctly on the
+  // initial fullscreen layout pass, not just on subsequent window resizes.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const resize = () => {
-      const rect  = canvas.getBoundingClientRect();
+      const rect = canvas.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
       const ratio = window.devicePixelRatio || 1;
       const image = canvas.toDataURL();
       canvas.width  = Math.floor(rect.width * ratio);
@@ -104,8 +114,9 @@ export default function SessionWhiteboard({ taskName, subscribed, onUpgrade, isF
     };
 
     resize();
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
+    return () => ro.disconnect();
   }, []);
 
   const canvasPoint = (event) => {
@@ -478,7 +489,7 @@ export default function SessionWhiteboard({ taskName, subscribed, onUpgrade, isF
       <div
         ref={boardRef}
         className={`relative overflow-hidden rounded-2xl border border-[#D8D4C8] bg-[#F7F5F0] touch-none ${
-          isFullscreen ? 'mx-4 mb-2 min-h-0 flex-1' : 'mt-3 h-[460px]'
+          isFullscreen ? 'mx-4 mb-2 min-h-0 flex-1 w-[calc(100%-2rem)]' : 'mt-3 h-[460px]'
         }`}
         onPointerMove={onBoardPointerMove}
         onPointerUp={stopDragging}
@@ -613,6 +624,8 @@ export default function SessionWhiteboard({ taskName, subscribed, onUpgrade, isF
               onPointerDown={(e) => startNodeDrag(e, node)}
               onClick={() => { setSelectedNodeId(node.id); setTool('mindmap'); }}
               className={`absolute max-w-[160px] -translate-x-1/2 -translate-y-1/2 rounded-full border px-4 py-2 text-center text-xs font-medium shadow-sm transition-shadow hover:shadow-md ${
+                tool === 'draw' ? 'pointer-events-none' : ''
+              } ${
                 isSelected
                   ? 'border-transparent bg-mora-accent text-mora-bg shadow-mora-accent/30'
                   : isRoot
