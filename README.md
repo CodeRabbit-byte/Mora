@@ -2,7 +2,7 @@
 
 **A minimalist focus app built for deep, intentional work.**
 
-Mora strips away everything that doesn't help you show up and start. It gives you a single task, a quiet timer, and a workspace that deepens with every session — from a blank canvas to a lived-in record of what you've built.
+Mora strips away everything that doesn't help you show up and start. It gives you a single task, a quiet timer, and a workspace that deepens with every session — from a blank canvas to a lived-in record of what you've built. (Testing for now, no servers yet)
 
 ---
 
